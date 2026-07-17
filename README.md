@@ -1,2 +1,6 @@
 # robofleet-simulator
-{{Currently only Python}} simulator that student's will see if they try to run their coding using the simulator. Does not connect to Ros2 stuff. 
+updates/important notes:
+- should probably use pygame, works better than arcade
+- A* navigation algorithm + 16/32/64 directional heuristic needs to be tested, 8 isn't enough (applies to all movement except move() and rotate())
+- will copy over the speak(), listen(), listen_until(), play_music(), show() functions
+
