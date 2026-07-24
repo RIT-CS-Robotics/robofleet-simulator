@@ -7,7 +7,7 @@ import speech_recognition as sr
 from contextlib import AbstractContextManager
 
 SCALE_FACTOR = 0.5
-MAP_HEIGHT - 3069 * SCALE_FACTOR
+MAP_HEIGHT = 3069 * SCALE_FACTOR
 MAP_WIDTH = 2640 * SCALE_FACTOR
 
 MOVE_SPEED = 5.0
@@ -34,17 +34,16 @@ class Robot(AbstractContextManager):
 		self._block_queue = queue.Queue()
 		self._non_block_queue = queue.Queue()
 
-
 		self.width = MAP_WIDTH
 		self.height = MAP_HEIGHT
 
 		# banned words
 		self._banned_words = set()
 		with open(BANNED_WORDS) as file:
-				for line in file:
-        			self._banned_words.add(line.strip())
-           
-		# INCLUDE:  audios allowed, points
+			for line in file:
+				self._banned_words.add(line.strip())
+
+		# INCLUDE: audios allowed, points
 		# set up pygame on main thread
 		self.screen = pygame.display.set_mode((self.width, self.height))
 		try:
@@ -95,25 +94,25 @@ class Robot(AbstractContextManager):
 	# -- BLOCKING COMMANDS --
 	# -- (actually work) --
 
-	def speak(self, vc=1, msg):
+	def speak(self, msg, vc=1):
 		message = msg
 		for word in self._banned_words:
-            if word in message:
-                return "ERROR: message contains banned word(s)."
+			if word in message:
+				return "ERROR: message contains banned word(s)."
 
-        # would normally be the type of voice, doesn't do anything in simulation
-        if vc < 0:
-            return "ERROR: invalid voice type"
-        elif vc > 3:
-            vc = 3
+		# would normally be the type of voice, doesn't do anything in simulation
+		if vc < 0:
+			return "ERROR: invalid voice type"
+		elif vc > 3:
+			vc = 3
 			print("WARNING: voice libarary only goes up to index 3.")
-                
-        voice = VOICE_LIB[vc]
-        # CHANGE TO "SHOW"
-        print(f"{voice}: robot says {message}.")
-        # add a time.sleep to simulate block
-                
-    # -- PSEUDO COMMANDS (example of possible outputs) --
+
+		voice = VOICE_LIB[vc]
+		# CHANGE TO "SHOW"
+		print(f"{voice}: robot says {message}.")
+		# add a time.sleep to simulate block
+
+	# -- PSEUDO COMMANDS (example of possible outputs) --
 	# -- (but they don't actually "work") -- 
 
 	def get_legs(self):
@@ -130,33 +129,33 @@ class Robot(AbstractContextManager):
 		pass
 
 	def whos_there(self):
-		pass	
+		pass 
 
 	def get_targets(self):
 		pass
 
-
 	# -- HELPER FUNCTIONS --
 	def _pixel_to_map(self, x, y):
+		pass
 
 	# -- PYGAME --
 	def done(self):
-        while self._running_program:
-            self.refresh_window()
-                        
-    def refresh_window(self):
-        for event in pygame.event.get()
-            if event.type == pygame.QUIT:
-                self._running_program = False
-                pygame.quit()
-                os._exit(0)
+		while self._running_program:
+			self.refresh_window()
 
-        self.screen.blit(self.map_background, (0, 0))
-        pygame.draw.circle(self.screen, (0, 255, 100), (int(self.x), int(self.y)), 15)
-        pygame.draw.circle(self.screen, (0, 180, 70), (int(self.x), int(self.y)), 15, 2)
+	def refresh_window(self):
+		for event in pygame.event.get():
+			if event.type == pygame.QUIT:
+				self._running_program = False
+				pygame.quit()
+				os._exit(0)
 
-        pygame.display.flip()
-        self.clock.tick(60)
+		self.screen.blit(self.map_background, (0, 0))
+		pygame.draw.circle(self.screen, (0, 255, 100), (int(self.x), int(self.y)), 15)
+		pygame.draw.circle(self.screen, (0, 180, 70), (int(self.x), int(self.y)), 15, 2)
+
+		pygame.display.flip()
+		self.clock.tick(60)
 
 	# -- THREADS --
 	def _queue_executor(self):
@@ -166,20 +165,20 @@ class Robot(AbstractContextManager):
 		pass
 
 	def __exit__(self, exc_type, exc_value, traceback):
-                while self._is_traveling:
-                        time.sleep(0.1)
-                self._running_program = False
-                time.sleep(0.1)
-                return
+		while self._is_traveling:
+			time.sleep(0.1)
+		self._running_program = False
+		time.sleep(0.1)
+		return
 
 if __name__ == "__main__":
-    def student_script(robot):
-        robot.go_to(1225, 815, wait=False)
+	def student_script(robot):
+		robot.go_to(1225, 815, wait=False)
 
-    x = 0
-    y = 0
-    r = Robot(x, y)
-    
-    threading.Thread(target=student_script, args=(r,), daemon=True).start()
-    
-    r.done()
+	x = 0
+	y = 0
+	r = Robot(x, y)
+
+	threading.Thread(target=student_script, args=(r,), daemon=True).start()
+
+	r.done()
