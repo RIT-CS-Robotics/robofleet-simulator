@@ -44,6 +44,24 @@ class Robot(AbstractContextManager):
 				for line in file:
         			self._banned_words.add(line.strip())
            
+        # coordinate database
+        self.waypoints = dict()
+
+        # add from file, to point database
+        with open("point_database.txt",'r') as f:
+            for line in f:
+                arr = line.strip().split()
+                self.waypoints[arr[0]] = dict()
+
+                x_str = arr[1].split(".")
+                y_str = arr[2].split(".")
+
+                x_coord = x_str[0]
+                y_coord = y_str[0]
+
+                self.waypoints[arr[0]]["x"] = x_coord
+                self.waypoints[arr[0]]["y"] = y_coord
+           
 		# INCLUDE:  audios allowed, points
 		# set up pygame on main thread
 		self.screen = pygame.display.set_mode((self.width, self.height))

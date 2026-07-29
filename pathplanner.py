@@ -2,6 +2,10 @@ import pygame
 import numpy as np
 import heapq
 
+
+"""
+NOT THE FINALIZED PATH PLANNER, JUST BASE TO REFERENCE
+"""
 class PathPlanner:
     def __init__(self, pygame_surface, obstacle_threshold=50, grid_scale=5):
         """

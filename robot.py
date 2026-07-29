@@ -1,53 +1,321 @@
-import socket, ast, os, queue, threading, time, logging
-import numpy as np
-from contextlib import AbstractContextManager
+import socket, ast, os, queue, threading, time, logging, random
+import heapq
 
-    """
-    Pure simulator version of robot.py
-    """
+import numpy as np
+import speech_recognition as sr
+import pygame
+
+from contextlib import AbstractContextManager
+from pathplanner import PathPlanner
+
+"""
+Pure simulator version of robot.py
+"""
+
+SCALE_FACTOR = 0.5
+MAP_HEIGHT - 3069 * SCALE_FACTOR
+MAP_WIDTH = 2640 * SCALE_FACTOR
+
+MOVE_SPEED = 5.0
+IMAGE_PATH = "data/golisano3v5.png"
+POINTS_FILE = "data/point_database.txt"
+
+START_X = 1228.0 * SCALE_FACTOR
+START_Y = 815.0 * SCALE_FACTOR
+
+VOICE_LIB = ['en-gb-scotland', 'en-gb-x-gbclan', 'en-gb-x-rp', 'en-us']
+SPEAK_RATE = 175
+BANNED_WORDS = "data/banned.txt"
+
+SONG_FILE = "data/songs.txt"
+
+IMG_HEIGHT = 480
+IMG_WIDTH = 640
+
+MAX_LEGS = 50
+
 class Robot(AbstractContextManager):
-    def __init__(self):
+    def __init__(self, x, y, degrees):
         self._is_traveling = False
         self._block_queue = queue.Queue()
         self._nonblock_queue = queue.Queue()
         
         self.dest_name = "N/A"
         self.dest_pos = "N/A"
-        self._running_program = False
         
+        self._running_program = True 
+        
+        self.x, self.y = float(x), float(y)
+        self.degrees = float(degrees)
+        self.speed = SPEED
+        self.path = []
+        
+        # banned words
+        self._banned_words = set()
+        with open(BANNED_WORDS) as file:
+            for line in file:
+                self._banned_words.add(line.strip())
+           
+        # songs
+        self._songs = []
+        with open(SONG_FILE) as file:
+            for line in file:
+                self._songs.append(line.strip())
+
+        # pygame: running on main thread
+        pygame.init()
+        self.screen = pygame.display.set_mode((MAP_WIDTH, MAP_HEIGHT))
+        try:
+            raw_image = pygame.image.load(IMAGE_PATH)
+            self.map_background = raw_image.convert()
+        except pygame.error as e:
+            print(f"Failed to load map image: {IMAGE_PATH}, {e}")        
+            os._exit(1)
+            
+        self.width, self.height = self.map_background.get_size()
+        pygame.display.set_caption("Robot Simulator")
+        self.clock = pygame.time.Clock()
+        self.planner = PathPlanner(self.map_background)
+
+        # movement thread setup
+        self._movement_queue = queue.Queue()
+        self._movement_thread = threading.Thread(target=self._queue_executor, daemon=True)
+        self._movement_thread.start()
+
+        # threads
         self._main_thread = threading.Thread(target=self.run_program, daemon=True)
         self._main_thread.start()
-        self._nonblock_thread = threading.Thread(target=self.queue_executor, daemon=True)
-        self._nonblock_thread.start()
+
+    # --- POSITION AND DESTINATION GETTERS ---
 
     def get_pos(self):
+        """
+        Get the current position (x, y) of the robot.
+        """
+        return self.x, self.y
+
+    def get_dest_name(self):
+        """
+        Return the current destination name of the robot, or "N/A".
+        """
+        return self.dest_name
+
+    def get_dest_pos(self):
+        """
+        Return the current destination coordinates of the robot, or None.
+        """
+        return self.dest_pos
+
+    def is_traveling(self):
+        """
+        Returns whether the robot is currently executing a movement task.
+        """
+        return self._is_traveling or not self._movement_queue.empty()
+    
+    # -- MOVEMENT --
+    
+    def rotate(self, degrees, wait=True):
+        """
+        Rotate the robot by {degrees}.
+        """
+        if wait:
+            self._movement_queue.put((self._execute_rotate, (degrees,), {}))
+            self._movement_queue.join()
+        else:
+            self._movement_queue.put((self._execute_rotate, (degrees,), {}))
+
+    def _execute_rotate(self, degrees):
+        """
+        Internal execution logic for rotation over time.
+        """
+        target_heading = (self.heading + degrees) % 360.0
+        step = 2.0 if degrees > 0 else -2.0
+        total_steps = int(abs(degrees) / abs(step))
+
+        for _ in range(total_steps):
+            if not self._running_program:
+                break
+            self.heading = (self.heading + step) % 360.0
+            time.sleep(0.016)
+
+    def _execute_go_to(self, x, y):
+        """
+        Internal synchronous movement logic executed inside the movement thread.
+        """
+        self.request_path(x, y)
+        
+        while self._is_traveling and len(self.path) > 0:
+            target = self.path[0]
+            dx = target[0] - self.x
+            dy = target[1] - self.y
+            distance = np.hypot(dx, dy)
+
+            if distance <= self.speed:
+                self.x, self.y = float(target[0]), float(target[1])
+                self.path.pop(0)
+            else:
+                self.x += (dx / distance) * self.speed
+                self.y += (dy / distance) * self.speed
+            
+            time.sleep(0.016)
+        
+        self._is_traveling = False
+
+    def move(self, metres, wait=True):
+        if wait:
+            self._movement_queue.put((self._execute_move, (metres,), {}))
+            self._movement_queue.join()
+        else:
+            self._movement_queue.put((self._execute_move, (metres,), {}))
+
+    def _execute_move(self, metres):
+        pass
+
+    
+    def move_to(self, metres, wait=True):
+        if wait:
+            self._movement_queue.put((self._execute_move_to, (metres,), {}))
+            self._movement_queue.join()
+        else:
+            self._movement_queue.put((self._execute_move_to, (metres,), {}))
+
+    def _execute_move_to(self, metres):
         pass
     
-    def move(self, metres):
+    def nav_to(self, location, wait=True):
+        if wait:
+            self._movement_queue.put((self._execute_nav_to, (location,), {}))
+            self._movement_queue.join()
+        else:
+            self._movement_queue.put((self._execute_nav_to, (location,), {}))
+
+    def _execute_nav_to(self, location):
         pass
-    
-    def rotate(self, degrees):
-        pass
-    
-    def move_to(self, metres):
-        pass
-    
-    def nav_to(self, location):
-        pass
-    
-    def go_to(self, location):
-        pass
-    
+
+    def request_path(self, target_x, target_y):
+        """
+        Attempt to get a path to target coordinates.
+        """
+        
+        print(f"Planning path from ({self.x}, {self.y}) to ({target_x}, {target_y})...")
+        calculated_path = self.planner.plan_path((self.x, self.y), (target_x, target_y), tolerance=self.speed)
+        
+        if calculated_path:
+            self.path = calculated_path
+            self._is_traveling = True
+            print("Path successfully found!")
+        else:
+            print("Failed to find a valid path or destination is blocked.")
+
+    def go_to(self, x, y, wait=True):
+        """
+        Go to (x, y) location, if valid.
+        """
+        if wait:
+            self._movement_queue.put((self._execute_go_to, (x, y), {}))
+            self._movement_queue.join()
+        else:
+            self._movement_queue.put((self._execute_go_to, (x, y), {}))
+        
     def halt(self):
-        pass
+        """
+        Clear movement queue and halt current travel.
+        """
+        while not self._movement_queue.empty():
+            try:
+                self._movement_queue.get_nowait()
+                self._movement_queue.task_done()
+            except queue.Empty:
+                break
+        self._is_traveling = False
+        self.dest_name = "N/A"
+        self.dest_pos = None
+        
+        
+    # -- BLOCKING COMMANDS: SPEECH AND AUDIO --
+	# -- (actually work) --
     
-    def speak(self, msg):
-        pass
+    def speak(self, msg, vc=1):
+        message = msg
+        for word in self._banned_words:
+            if word in message:
+                return "ERROR: message contains banned word(s)."
+
+        # would normally be the type of voice, doesn't do anything in simulation
+        if vc < 0:
+            return "ERROR: invalid voice type"
+        elif vc > 3:
+            vc = 3
+            print("WARNING: voice libarary only goes up to index 3. Using voice at index 3.")
+                
+        voice = VOICE_LIB[vc]
+        # CHANGE TO "SHOW"
+        print(f"{voice}: robot says {message}.")
+        # add a time.sleep to simulate block
     
     def listen(self, wait_timeout=10, talk_timeout=10):
+        """
+        Listen until person stops talking, or the wait/phrase timeout occurs
+        and return text heard. 
+        """
+        mic = sr.Recognizer()
+        try:
+            with sr.Microphone() as source:
+                mic.adjust_for_ambient_noise(source, duration=1)
+                audio = mic.listen(source)
+                print("Listening...")
+                text = mic.recognize_google(audio)
+                text = text.lower()
+        finally:
+            pass
+        return text
+    
+    def listen_until(self, phrases, listen_timeout=10, phrase_timeout=10):
+        """
+        Listen until one of the specified phrases is detected.
+        """
+        mic = sr.Recognizer()
+        try:
+            while self._running_program:
+                with sr.Microphone() as source:
+                    mic.adjust_for_ambient_noise(source, duration=1)
+                    audio = mic.listen(source, timeout=listen_timeout, phrase_time_limit=phrase_timeout)
+                    text = mic.recognize_google(audio).lower()
+                    for phrase in phrases:
+                        if phrase in text:
+                            return phrase, text
+        except Exception as e:
+            print(f"listen_until error: {e}")
+            return "", ""
+    
+    # -- PSEUDO COMMANDS (example of possible outputs) --
+	# -- (but they don't actually "work") -- 
+ 
+    def play_music(self, song_id):
+        max = len(self._songs) - 1
+        if max < song_id:
+            print(f"WARNING: songs library is not that large. Playing sound at {max} instead.")
+            song_id = max
+        elif song_id < 0:
+            print(f"ERROR: invalid song id, play_music() failed.")
+            return
+        
+        song = self._songs[song_id]
+        song = song[:-4] # remove the .mp3
+        print(f"Now playing: {song}")
+        
+    def get_legs(self):
+        """
+        Return the number of "legs" detected. On the actual robot, this returns the number of objects
+        detected that are about the width of a leg, so the randomizer might not be far off anyway...
+        """
+		legs = random.randint(0, MAX_LEGS)
+		return legs
+    
+    def whos_there(self):
         pass
     
-    def get_legs(self):
+    def get_targets(self):
         pass
     
     def get_laser_scan(self):
@@ -62,13 +330,61 @@ class Robot(AbstractContextManager):
     def scan_for(self):
         pass
     
-    def main_thread(self):
+    
+    # -- EXECUTORS  --
+    def run_program(self):
         while self._running_program:
             pass
     
-    def queue_executor(self):
+    def _queue_executor(self):
+        """
+        Run non blocking movement commands in the background.
+        """
         while self._running_program:
-            pass
+            try:
+                item = self._movement_queue.get(timeout=0.1)
+                cmd = item[0]
+
+                if cmd == "go_to":
+                    self._execute_go_to(item[1], item[2])
+                elif cmd == "rotate":
+                    self._execute_rotate(item[1])
+                elif cmd == "move":
+                    self._execute_move(item[1])
+                elif cmd == "move_to":
+                    self._execute_move_to(item[1])
+                elif cmd == "nav_to":
+                    self._execute_nav_to(item[1])
+
+                self._movement_queue.task_done()
+            except queue.Empty:
+                continue
+            
+	# -- PYGAME --
+	def done(self):
+        while self._running_program:
+            self.refresh_window()
+                        
+    def refresh_window(self):
+        for event in pygame.event.get()
+            if event.type == pygame.QUIT:
+                self._running_program = False
+                pygame.quit()
+                os._exit(0)
+
+        self.screen.blit(self.map_background, (0, 0))
+        pygame.draw.circle(self.screen, (0, 255, 100), (int(self.x), int(self.y)), 15)
+        pygame.draw.circle(self.screen, (0, 180, 70), (int(self.x), int(self.y)), 15, 2)
+
+        pygame.display.flip()
+        self.clock.tick(60)
+        
+    def _generate_costmap(self):
+        grid = pygame.surfarray.array3d(self.map_background)
+        gray = np.dot(grid[..., :3], [0.2989, 0.5870, 0.1140])
+        binary_grid = np.where(gray < 50, 1, 0)
+        return binary_grid
+    
         
     def __exit__(self, exc_type, exc_value, traceback):
         while self._is_traveling:
@@ -76,3 +392,30 @@ class Robot(AbstractContextManager):
         self._running_program = False
         time.sleep(0.1)
         return
+    
+    
+# -- THE PHOTO CLASS --
+
+class Photo:
+    def __init__(self, robot_obj, data=None):
+        self.data = data or []
+        self.height = IMG_HEIGHT
+        self.width = IMG_WIDTH
+        
+        # randomize the pixels 
+        self.pixels = [[[0, 0, 0] for _ in range(self.width)] for _ in range(self.height)]
+
+    def get_height(self):
+        return self.height
+
+    def get_width(self):
+        return self.width
+
+    def get_pixels(self):
+        return self.pixels
+
+    def objects_seen(self):
+        return set()
+
+    def whos_there(self):
+        return set()
