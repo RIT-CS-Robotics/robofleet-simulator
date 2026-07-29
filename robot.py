@@ -12,11 +12,11 @@ from pathplanner import PathPlanner
 Pure simulator version of robot.py
 """
 
-SCALE_FACTOR = 0.5
-MAP_HEIGHT - 3069 * SCALE_FACTOR
+SCALE_FACTOR = 1
+MAP_HEIGHT = 3069 * SCALE_FACTOR
 MAP_WIDTH = 2640 * SCALE_FACTOR
 
-MOVE_SPEED = 5.0
+SPEED = 5.0
 IMAGE_PATH = "data/golisano3v5.png"
 POINTS_FILE = "data/point_database.txt"
 
@@ -70,17 +70,19 @@ class Robot(AbstractContextManager):
         with open(IMAGE_FILE) as file:
             for line in file:
                 self._images.append(line.strip())
-                
+        
+        # object recognizer (fake: simulator only)
         self._coco = []
         with open(COCO_FILE) as file:
             for line in file:
-                self._coco.append(line.strip())
+                info = ast.literal_eval(line.strip())
+                self._coco.append(info)
                 
-                
+        # face recognizer (fake: simulator only)
         self._recognizer = []
         with open(FACE_FILE) as file:
-            for line in file:
-                self._recognizer.append(line.strip())
+                info = ast.literal_eval(line.strip())
+                self._coco.append(info)
 
         # pygame: running on main thread
         pygame.init()
@@ -139,24 +141,34 @@ class Robot(AbstractContextManager):
         Rotate the robot by {degrees}.
         """
         if wait:
-            self._movement_queue.put((self._execute_rotate, (degrees,), {}))
+            self._movement_queue.put(("rotate", (degrees,)))
             self._movement_queue.join()
         else:
-            self._movement_queue.put((self._execute_rotate, (degrees,), {}))
+            self._movement_queue.put(("rotate", (degrees,)))
 
     def _execute_rotate(self, degrees):
         """
         Internal execution logic for rotation over time.
         """
-        target_heading = (self.heading + degrees) % 360.0
+        target_heading = (self.degrees + degrees) % 360.0
         step = 2.0 if degrees > 0 else -2.0
         total_steps = int(abs(degrees) / abs(step))
 
         for _ in range(total_steps):
             if not self._running_program:
                 break
-            self.heading = (self.heading + step) % 360.0
+            self.degrees = (self.degrees + step) % 360.0
             time.sleep(0.016)
+            
+    def go_to(self, x, y, wait=True):
+        """
+        Go to (x, y) location, if valid.
+        """
+        if wait:
+            self._movement_queue.put(("go_to", (x,y)))
+            self._movement_queue.join()
+        else:
+            self._movement_queue.put(("go_to", (x,y)))
 
     def _execute_go_to(self, x, y):
         """
@@ -182,11 +194,14 @@ class Robot(AbstractContextManager):
         self._is_traveling = False
 
     def move(self, metres, wait=True):
+        """
+        Move 
+        """
         if wait:
-            self._movement_queue.put((self._execute_move, (metres,), {}))
+            self._movement_queue.put(("move", (metres,)))
             self._movement_queue.join()
         else:
-            self._movement_queue.put((self._execute_move, (metres,), {}))
+            self._movement_queue.put(("move", (metres,)))
 
     def _execute_move(self, metres):
         pass
@@ -194,20 +209,20 @@ class Robot(AbstractContextManager):
     
     def move_to(self, metres, wait=True):
         if wait:
-            self._movement_queue.put((self._execute_move_to, (metres,), {}))
+            self._movement_queue.put(("go_to", (x,y)))
             self._movement_queue.join()
         else:
-            self._movement_queue.put((self._execute_move_to, (metres,), {}))
+            self._movement_queue.put(("go_to", (x,y)))
 
     def _execute_move_to(self, metres):
         pass
     
     def nav_to(self, location, wait=True):
         if wait:
-            self._movement_queue.put((self._execute_nav_to, (location,), {}))
+            self._movement_queue.put(("go_to", (x,y)))
             self._movement_queue.join()
         else:
-            self._movement_queue.put((self._execute_nav_to, (location,), {}))
+            self._movement_queue.put(("go_to", (x,y)))
 
     def _execute_nav_to(self, location):
         pass
@@ -216,26 +231,19 @@ class Robot(AbstractContextManager):
         """
         Attempt to get a path to target coordinates.
         """
-        
         print(f"Planning path from ({self.x}, {self.y}) to ({target_x}, {target_y})...")
-        calculated_path = self.planner.plan_path((self.x, self.y), (target_x, target_y), tolerance=self.speed)
+        self.dest_pos = (target_x, target_y)
+        
+        # get path
+        calculated_path = self.planner.a_star_path((self.x, self.y), (target_x, target_y), tolerance=self.speed)
         
         if calculated_path:
             self.path = calculated_path
             self._is_traveling = True
             print("Path successfully found!")
         else:
+            self.dest_pos = None
             print("Failed to find a valid path or destination is blocked.")
-
-    def go_to(self, x, y, wait=True):
-        """
-        Go to (x, y) location, if valid.
-        """
-        if wait:
-            self._movement_queue.put((self._execute_go_to, (x, y), {}))
-            self._movement_queue.join()
-        else:
-            self._movement_queue.put((self._execute_go_to, (x, y), {}))
         
     def halt(self):
         """
@@ -253,7 +261,7 @@ class Robot(AbstractContextManager):
         
         
     # -- BLOCKING COMMANDS: SPEECH AND AUDIO --
-	# -- (actually work) --
+    # -- (just print)
     
     def speak(self, msg, vc=1):
         message = msg
@@ -295,8 +303,8 @@ class Robot(AbstractContextManager):
         Listen until one of the specified phrases is detected.
         """
         mic = sr.Recognizer()
-        try:
-            while self._running_program:
+        while self._running_program:
+            try:
                 with sr.Microphone() as source:
                     mic.adjust_for_ambient_noise(source, duration=1)
                     audio = mic.listen(source, timeout=listen_timeout, phrase_time_limit=phrase_timeout)
@@ -304,12 +312,16 @@ class Robot(AbstractContextManager):
                     for phrase in phrases:
                         if phrase in text:
                             return phrase, text
-        except Exception as e:
-            print(f"listen_until error: {e}")
-            return "", ""
+            except Exception as e:
+                print(f"listen_until error: {e}")
+                return "",""
+        return "", ""
     
     # -- PSEUDO COMMANDS (example of possible outputs) --
 	# -- (but they don't actually "work") -- 
+ 
+    def take_photo(self):
+        pass
  
     def play_music(self, song_id):
         max_size = len(self._songs) - 1
@@ -329,8 +341,8 @@ class Robot(AbstractContextManager):
         Return the number of "legs" detected. On the actual robot, this returns the number of objects
         detected that are about the width of a leg, so the randomizer might not be far off anyway...
         """
-		legs = random.randint(0, MAX_LEGS)
-		return legs
+        legs = random.randint(0, MAX_LEGS)
+        return legs
     
     def whos_there(self):
         """
@@ -359,6 +371,9 @@ class Robot(AbstractContextManager):
         pass
  
     def objects_seen(self):
+        """
+        Choose a random image from library and return the object classes detected.
+        """
         max_file = len(self._images) - 1
         img = random.randint(0, max_file)
         objects = self._coco[img]
@@ -366,7 +381,7 @@ class Robot(AbstractContextManager):
         # go from list of tuples to set
         objects = set()
         for o in objects:
-            if t[0] != "Unknown":
+            if o[0] != "Unknown":
                 objects.add(t[0])
         return objects
     
@@ -394,7 +409,7 @@ class Robot(AbstractContextManager):
     # -- EXECUTORS  --
     def run_program(self):
         while self._running_program:
-            pass
+            time.sleep(0.1)
     
     def _queue_executor(self):
         """
@@ -404,29 +419,30 @@ class Robot(AbstractContextManager):
             try:
                 item = self._movement_queue.get(timeout=0.1)
                 cmd = item[0]
+                args = item[1]
 
                 if cmd == "go_to":
-                    self._execute_go_to(item[1], item[2])
+                    self._execute_go_to(args[0], args[1])
                 elif cmd == "rotate":
-                    self._execute_rotate(item[1])
+                    self._execute_rotate(args[0])
                 elif cmd == "move":
-                    self._execute_move(item[1])
+                    self._execute_move(args[0])
                 elif cmd == "move_to":
-                    self._execute_move_to(item[1])
+                    self._execute_move_to(args[0])
                 elif cmd == "nav_to":
-                    self._execute_nav_to(item[1])
+                    self._execute_nav_to(args[0])
 
                 self._movement_queue.task_done()
             except queue.Empty:
                 continue
             
 	# -- PYGAME --
-	def done(self):
+    def done(self):
         while self._running_program:
             self.refresh_window()
                         
     def refresh_window(self):
-        for event in pygame.event.get()
+        for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 self._running_program = False
                 pygame.quit()
@@ -457,12 +473,12 @@ class Robot(AbstractContextManager):
 # -- THE PHOTO CLASS --
 
 class Photo:
-    def __init__(self, robot_obj, data=None):
-        self.data = data or []
+    def __init__(self, robot_obj, data):
+        self.data = []
         self.height = IMG_HEIGHT
         self.width = IMG_WIDTH
         
-        # randomize the pixels 
+        # randomize the pixels TODO
         self.pixels = [[[0, 0, 0] for _ in range(self.width)] for _ in range(self.height)]
 
     def get_height(self):
