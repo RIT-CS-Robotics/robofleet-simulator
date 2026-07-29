@@ -38,7 +38,7 @@ class PathPlanner:
         if isinstance(surface, str):
             surface = pygame.image.load(surface)
         elif isinstance(surface, pygame.Surface):
-            surface = source
+            pass
         else:
             raise TypeError("Could not create costmap")
         
@@ -49,9 +49,12 @@ class PathPlanner:
         grayscale_grid = grayscale.T
         costmap = np.where(grayscale_grid < OBSTACLE_THRESHOLD, 1, 0)
         return costmap
+    
+    def is_valid(self, row, col):
+        return 0 <= row < self.width and 0 <= col < self.height
         
     def is_open(self, row, col):
-        return self.costmap[row][col] == 1
+        return self.costmap[row][col] == 0
     
     def is_destination(self, row, col, dest_pos):
         return row == dest_pos[0] and col == dest_pos[1]
@@ -76,7 +79,7 @@ class PathPlanner:
             return [start_pos]
         
         # cell grid
-        cell_details = [[Cell() for _ in range(self.width)] for _ in range(self.height)]
+        cell_details = [[Cell() for _ in range(self.height)] for _ in range(self.width)]
        
         s_row, s_col = start
         cell_details[s_row][s_col].g = 0.0
@@ -100,7 +103,7 @@ class PathPlanner:
             p = heapq.heappop(open_list)
             x = p[1]
             y = p[2]
-            coord = (a, b)
+            coord = (x, y)
             visited.add(coord)
             
             # check successors
@@ -118,7 +121,7 @@ class PathPlanner:
                         
                         # calculate the new values
                         g_new = cell_details[x][y].g + 1.0
-                        h_new = calculate_heuristic[new_x, new_y, goal]
+                        h_new = self.calculate_heuristic(new_x, new_y, goal)
                         f_new = g_new + h_new
                         
                         # cell not open or new f value is smaller
@@ -129,6 +132,9 @@ class PathPlanner:
                             cell_details[new_x][new_y].parent = (x, y)
                             heapq.heappush(open_list, (f_new, new_x, new_y))
             
+            if dest_found:
+                break
+            
         if not dest_found:
             print("Could not form a path to destination.")
             return None
@@ -138,10 +144,10 @@ class PathPlanner:
         current = goal
         while current is not None:
             r, c = current
-            orig_x = c * self.grid_scale + (self.grid_scale / 2.0)
-            orig_y = r * self.grid_scale + (self.grid_scale / 2.0)
+            orig_x = r * self.grid_scale + (self.grid_scale / 2.0)
+            orig_y = c * self.grid_scale + (self.grid_scale / 2.0)
             path.append((orig_x, orig_y))
-            curr = cell_details[r][c].parent
+            current = cell_details[r][c].parent
 
         path.reverse()
         return path
