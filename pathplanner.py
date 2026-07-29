@@ -47,7 +47,7 @@ class PathPlanner:
         
         # match standard indexing
         grayscale_grid = grayscale.T
-        costmap = np.where(grayscale_grid < OBSTACLE_THRESHOLD, 1, 0)
+        costmap = np.where(grayscale_grid < 100, 1, 0)
         return costmap
     
     def is_valid(self, row, col):

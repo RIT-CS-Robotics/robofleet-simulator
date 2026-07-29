@@ -163,18 +163,31 @@ class Robot(AbstractContextManager):
     def go_to(self, x, y, wait=True):
         """
         Go to (x, y) location, if valid.
-        """
+        
         if wait:
             self._movement_queue.put(("go_to", (x,y)))
             self._movement_queue.join()
         else:
             self._movement_queue.put(("go_to", (x,y)))
+        """
+        self._is_traveling = True
+        self._movement_queue.put(("go_to", (x, y)))
+    
+        if wait:
+            # Main thread handles Pygame updates while waiting
+            while self._is_traveling or not self._movement_queue.empty():
+                self.refresh_window()
+                time.sleep(0.01)
 
     def _execute_go_to(self, x, y):
         """
         Internal synchronous movement logic executed inside the movement thread.
         """
-        self.request_path(x, y)
+        self.path = self.planner.a_star_path((self.x, self.y), (x, y))
+        
+        if not self.path:
+            print("FAILED: No path found.")
+            return
         
         while self._is_traveling and len(self.path) > 0:
             target = self.path[0]
@@ -188,7 +201,7 @@ class Robot(AbstractContextManager):
             else:
                 self.x += (dx / distance) * self.speed
                 self.y += (dy / distance) * self.speed
-            
+
             time.sleep(0.016)
         
         self._is_traveling = False
@@ -449,8 +462,8 @@ class Robot(AbstractContextManager):
                 os._exit(0)
 
         self.screen.blit(self.map_background, (0, 0))
-        pygame.draw.circle(self.screen, (0, 255, 100), (int(self.x), int(self.y)), 15)
-        pygame.draw.circle(self.screen, (0, 180, 70), (int(self.x), int(self.y)), 15, 2)
+        pygame.draw.circle(self.screen, (0, 255, 100), (int(self.x), int(self.y)), 10)
+        pygame.draw.circle(self.screen, (0, 180, 70), (int(self.x), int(self.y)), 10, 2)
 
         pygame.display.flip()
         self.clock.tick(60)
