@@ -1,0 +1,4 @@
+[("person", 5, 5), ("chair", 5, 5), ("chair", 5, 5), ("chair", 5, 5)]
+[("person", 5, 5), ("chair", 5, 5), ("chair", 5, 5), ("chair", 5, 5)]
+[("person", 5, 5), ("chair", 5, 5), ("chair", 5, 5), ("chair", 5, 5)]
+[("person", 5, 5), ("chair", 5, 5), ("chair", 5, 5), ("chair", 5, 5)]
