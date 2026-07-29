@@ -29,6 +29,9 @@ BANNED_WORDS = "data/banned.txt"
 
 SONG_FILE = "data/songs.txt"
 
+IMAGE_FILE = "data/images.txt"
+FACE_FILE = "data/recognizer_out.txt"
+COCO_FILE = "data/coco_out.txt"
 IMG_HEIGHT = 480
 IMG_WIDTH = 640
 
@@ -61,6 +64,23 @@ class Robot(AbstractContextManager):
         with open(SONG_FILE) as file:
             for line in file:
                 self._songs.append(line.strip())
+                
+        # image library (simulator only)
+        self._images = []
+        with open(IMAGE_FILE) as file:
+            for line in file:
+                self._images.append(line.strip())
+                
+        self._coco = []
+        with open(COCO_FILE) as file:
+            for line in file:
+                self._coco.append(line.strip())
+                
+                
+        self._recognizer = []
+        with open(FACE_FILE) as file:
+            for line in file:
+                self._recognizer.append(line.strip())
 
         # pygame: running on main thread
         pygame.init()
@@ -292,10 +312,10 @@ class Robot(AbstractContextManager):
 	# -- (but they don't actually "work") -- 
  
     def play_music(self, song_id):
-        max = len(self._songs) - 1
-        if max < song_id:
-            print(f"WARNING: songs library is not that large. Playing sound at {max} instead.")
-            song_id = max
+        max_size = len(self._songs) - 1
+        if max_size < song_id:
+            print(f"WARNING: songs library is not that large. Playing sound at {max_size} instead.")
+            song_id = max_size
         elif song_id < 0:
             print(f"ERROR: invalid song id, play_music() failed.")
             return
@@ -313,23 +333,63 @@ class Robot(AbstractContextManager):
 		return legs
     
     def whos_there(self):
-        pass
+        """
+        Choose a random image from library and return the people detected (excluding Unknown).
+        """
+        max_file = len(self._images) - 1
+        img = random.randint(0, max_file)
+        targets = self._recognizer[img]
+        
+        # go from list of tuples to set
+        people = set()
+        for t in targets:
+            if t[0] != "Unknown":
+                people.add(t[0])
+        return people
     
     def get_targets(self):
-        pass
+        """
+        """
+        max_file = len(self._images) - 1
+        img = random.randint(0, max_file)
+        targets = self._recognizer[img]
+        return targets
     
     def get_laser_scan(self):
         pass
+ 
+    def objects_seen(self):
+        max_file = len(self._images) - 1
+        img = random.randint(0, max_file)
+        objects = self._coco[img]
+        
+        # go from list of tuples to set
+        objects = set()
+        for o in objects:
+            if t[0] != "Unknown":
+                objects.add(t[0])
+        return objects
+    
+    def scan_for(self, obj):
+        max_file = len(self._images) - 1
+        img = random.randint(0, max_file)
+        objects = self._coco[img]
+        
+        # convert to list of tuples (x, y)
+        found = []
+        for o in objects:
+            if o[0] == obj:
+                x = o[1]
+                y = o[2]
+                coords = (x, y)
+                found.append(coords)
+        return found      
     
     def get_object_scan(self):
-        pass
-    
-    def objects_seen(self):
-        pass
-    
-    def scan_for(self):
-        pass
-    
+        max_file = len(self._images) - 1
+        img = random.randint(0, max_file)
+        objects = self._coco[img]
+        return objects
     
     # -- EXECUTORS  --
     def run_program(self):
