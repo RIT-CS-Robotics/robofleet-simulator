@@ -46,8 +46,7 @@ class PathPlanner:
         grayscale = np.dot(rgb_array[..., :3], [0.2989, 0.5870, 0.1140])
         
         # match standard indexing
-        grayscale_grid = grayscale.T
-        costmap = np.where(grayscale_grid < 100, 1, 0)
+        costmap = np.where(grayscale < 254, 1, 0)
         return costmap
     
     def is_valid(self, row, col):

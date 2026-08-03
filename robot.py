@@ -38,7 +38,7 @@ IMG_WIDTH = 640
 MAX_LEGS = 50
 
 class Robot(AbstractContextManager):
-    def __init__(self, x, y, degrees):
+    def __init__(self, degrees):
         self._is_traveling = False
         self._block_queue = queue.Queue()
         self._nonblock_queue = queue.Queue()
@@ -48,7 +48,7 @@ class Robot(AbstractContextManager):
         
         self._running_program = True 
         
-        self.x, self.y = float(x), float(y)
+        self.x, self.y = float(START_X), float(START_Y)
         self.degrees = float(degrees)
         self.speed = SPEED
         self.path = []
