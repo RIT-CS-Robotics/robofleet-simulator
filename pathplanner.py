@@ -11,6 +11,7 @@ Author: Anusha Ghosh
 OBSTACLE_THRESHOLD = 50
 GRID_SCALE = 5
 MAP_IMAGE = "data/golisano3v5.png"
+ROBOT_RADIUS = 5
 
 class Cell:
     def __init__(self):
@@ -29,9 +30,13 @@ class PathPlanner:
         full_costmap = self._generate_global_costmap(MAP_IMAGE)
         
         # downsize costmap
-        self.costmap = full_costmap[::self.grid_scale, ::self.grid_scale]
-        self.width = self.costmap.shape[0]
-        self.height = self.costmap.shape[1]
+        downscaled = full_costmap[::self.grid_scale, ::self.grid_scale]
+        self.width = downscaled.shape[0]
+        self.height = downscaled.shape[1]
+        
+        # inflate
+        grid_radius = int(math.ceil(ROBOT_RADIUS / self.grid_scale))
+        self.costmap = self.inflate_costmap(downscaled, grid_radius)
         
     def _generate_global_costmap(self, surface):
         # in case i mess up somewhere, allows both pygame surface and image input
@@ -48,6 +53,26 @@ class PathPlanner:
         # match standard indexing
         costmap = np.where(grayscale < 254, 1, 0)
         return costmap
+    
+    def inflate_costmap(self, costmap, grid_radius):
+        """
+        Inflates obstacles to account for robot radius so it doesn't brush up against walls/appear like it's
+        partially phasing through.
+        """
+        rows, cols = costmap.shape
+        inflated_costmap = np.copy(costmap)
+        
+        for r in range(rows):
+            for c in range(cols):
+                if costmap[r, c] == 1:
+                    for dr in range(-grid_radius, grid_radius + 1):
+                        for dc in range(-grid_radius, grid_radius + 1):
+                            if (dr**2 + dc**2) <= (grid_radius**2):
+                                nr, nc = r + dr, c + dc
+                                if 0 <= nr < rows and 0 <= nc < cols:
+                                    inflated_costmap[nr, nc] = 1
+                                
+        return inflated_costmap
     
     def is_valid(self, row, col):
         return 0 <= row < self.width and 0 <= col < self.height

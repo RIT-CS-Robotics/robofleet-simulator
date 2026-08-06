@@ -13,6 +13,8 @@ Pure simulator version of robot.py
 """
 
 SCALE_FACTOR = 1
+ROBOT_RADIUS = 10
+
 MAP_HEIGHT = 3069 * SCALE_FACTOR
 MAP_WIDTH = 2640 * SCALE_FACTOR
 
@@ -462,8 +464,8 @@ class Robot(AbstractContextManager):
                 os._exit(0)
 
         self.screen.blit(self.map_background, (0, 0))
-        pygame.draw.circle(self.screen, (0, 255, 100), (int(self.x), int(self.y)), 10)
-        pygame.draw.circle(self.screen, (0, 180, 70), (int(self.x), int(self.y)), 10, 2)
+        pygame.draw.circle(self.screen, (0, 255, 100), (int(self.x), int(self.y)), ROBOT_RADIUS)
+        pygame.draw.circle(self.screen, (0, 180, 70), (int(self.x), int(self.y)), ROBOT_RADIUS, 2)
 
         pygame.display.flip()
         self.clock.tick(60)
